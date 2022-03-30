@@ -1,0 +1,3 @@
+applicationId: empty
+token: premium
+credentials: premium
