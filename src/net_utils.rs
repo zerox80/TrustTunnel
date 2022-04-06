@@ -1,7 +1,5 @@
-use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
-use lazy_static::lazy_static;
-use std::net::UdpSocket;
+use std::io;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use bytes::{BufMut, Bytes, BytesMut};
 
 
@@ -24,10 +22,6 @@ pub(crate) const QUIC_DATA_FRAME_ID_WIRE_LENGTH: usize = varint_len(0);
 /// 1 byte for the chunk itself.
 pub(crate) const MIN_USABLE_QUIC_STREAM_CAPACITY: usize = QUIC_DATA_FRAME_ID_WIRE_LENGTH + 1 + 1;
 
-lazy_static! {
-    pub(crate) static ref IPV4_BIND_ADDRESS: SocketAddr = SocketAddr::from_str("0.0.0.0:0").unwrap();
-    pub(crate) static ref IPV6_BIND_ADDRESS: SocketAddr = SocketAddr::from_str("[::]:0").unwrap();
-}
 
 pub(crate) type HostnamePort = (String, u16);
 
@@ -37,11 +31,11 @@ pub(crate) enum TcpDestination {
     HostName(HostnamePort),
 }
 
-pub(crate) fn make_udp_socket(is_v4: bool) -> std::io::Result<UdpSocket> {
+pub(crate) fn make_udp_socket(is_v4: bool) -> io::Result<UdpSocket> {
     if is_v4 {
-        UdpSocket::bind(*IPV4_BIND_ADDRESS)
+        UdpSocket::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
     } else {
-        UdpSocket::bind(*IPV6_BIND_ADDRESS)
+        UdpSocket::bind(SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)))
     }
 }
 

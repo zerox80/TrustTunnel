@@ -1,9 +1,8 @@
 use std::fmt::Formatter;
 use std::io;
 use std::io::ErrorKind;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use serde::de::Error;
@@ -93,9 +92,8 @@ pub struct Socks5ForwarderSettings {
     pub(crate) address: SocketAddr,
 }
 
-pub struct Socks5ForwarderSettingsBuilder<A: ToSocketAddrs> {
+pub struct Socks5ForwarderSettingsBuilder {
     settings: Socks5ForwarderSettings,
-    address: Option<A>,
 }
 
 #[derive(Deserialize)]
@@ -176,9 +174,8 @@ pub struct QuicSettings {
     pub(crate) message_queue_capacity: usize,
 }
 
-pub struct SettingsBuilder<A: ToSocketAddrs> {
+pub struct SettingsBuilder {
     settings: Settings,
-    listen_address: Option<A>,
     tunnel_tls_host_info_set: bool,
     authorizer: Option<Box<dyn Authorizer>>,
 }
@@ -216,7 +213,7 @@ pub enum Socks5Error {
 }
 
 impl Settings {
-    pub fn builder<A: ToSocketAddrs>() -> SettingsBuilder<A> {
+    pub fn builder() -> SettingsBuilder {
         SettingsBuilder::new()
     }
 
@@ -225,7 +222,7 @@ impl Settings {
     }
 
     fn default_listen_address() -> SocketAddr {
-        "0.0.0.0:443".parse().unwrap()
+        SocketAddr::from((Ipv4Addr::UNSPECIFIED, 443))
     }
 
     fn default_authorizer() -> Arc<dyn Authorizer> {
@@ -250,7 +247,7 @@ impl Settings {
 }
 
 impl Socks5ForwarderSettings {
-    pub fn builder<A: ToSocketAddrs>() -> Socks5ForwarderSettingsBuilder<A> {
+    pub fn builder() -> Socks5ForwarderSettingsBuilder {
         Socks5ForwarderSettingsBuilder::new()
     }
 }
@@ -345,7 +342,7 @@ impl QuicSettings {
     }
 }
 
-impl<A: ToSocketAddrs> SettingsBuilder<A> {
+impl SettingsBuilder {
     fn new() -> Self {
         Self {
             settings: Settings {
@@ -362,7 +359,6 @@ impl<A: ToSocketAddrs> SettingsBuilder<A> {
                 listen_protocols: vec![],
                 authorizer: Settings::default_authorizer(),
             },
-            listen_address: None,
             tunnel_tls_host_info_set: false,
             authorizer: None,
         }
@@ -370,12 +366,7 @@ impl<A: ToSocketAddrs> SettingsBuilder<A> {
 
     /// Finalize [`Settings`]
     pub fn build(mut self) -> Result<Settings> {
-        if let Some(a) = self.listen_address.take() {
-            self.settings.listen_address = a.to_socket_addrs()
-                .map_err(|e| BuilderError::ListenAddress(format!("Parsing failed: {}", e)))?
-                .next()
-                .ok_or_else(|| BuilderError::ListenAddress("Parsed address to empty list".to_string()))?;
-        } else {
+        if self.settings.listen_address.ip().is_unspecified() && self.settings.listen_address.port() == 0 {
             return Err(BuilderError::ListenAddress("Not set".to_string()));
         }
 
@@ -412,8 +403,10 @@ impl<A: ToSocketAddrs> SettingsBuilder<A> {
     }
 
     /// Set the address to listen on
-    pub fn listen_address(mut self, addr: A) -> io::Result<Self> {
-        self.listen_address = Some(addr);
+    pub fn listen_address<A: ToSocketAddrs>(mut self, addr: A) -> io::Result<Self> {
+        self.settings.listen_address = addr.to_socket_addrs()?
+            .next()
+            .ok_or_else(|| io::Error::new(ErrorKind::Other, "Parsed address to empty list"))?;
         Ok(self)
     }
 
@@ -479,35 +472,30 @@ impl<A: ToSocketAddrs> SettingsBuilder<A> {
     }
 }
 
-impl<A: ToSocketAddrs> Socks5ForwarderSettingsBuilder<A> {
+impl Socks5ForwarderSettingsBuilder {
     fn new() -> Self {
         Self {
             settings: Socks5ForwarderSettings {
-                address: SocketAddr::from_str("0.0.0.0:0").unwrap(),
+                address: SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)),
             },
-            address: None,
         }
     }
 
     /// Finalize [`Socks5ForwarderSettings`]
-    pub fn build(mut self) -> Socks5Result<Socks5ForwarderSettings> {
-        match self.address {
-            None => return Err(Socks5Error::Address("Not set".to_string())),
-            Some(a) => {
-                self.settings.address = a.to_socket_addrs()
-                    .map_err(|e| Socks5Error::Address(format!("Parsing failed: {}", e)))?
-                    .next()
-                    .ok_or_else(|| Socks5Error::Address("Parsed address to empty list".to_string()))?;
-            }
+    pub fn build(self) -> Socks5Result<Socks5ForwarderSettings> {
+        if self.settings.address.ip().is_unspecified() {
+            return Err(Socks5Error::Address("Not set".to_string()));
         }
 
         Ok(self.settings)
     }
 
     /// Set the SOCKS proxy address
-    pub fn server_address(mut self, v: A) -> Self {
-        self.address = Some(v);
-        self
+    pub fn server_address<A: ToSocketAddrs>(mut self, v: A) -> io::Result<Self> {
+        self.settings.address = v.to_socket_addrs()?
+            .next()
+            .ok_or_else(|| io::Error::new(ErrorKind::Other, "Parsed address to empty list"))?;
+        Ok(self)
     }
 }
 
