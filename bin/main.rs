@@ -7,6 +7,7 @@ use vpn_libs_endpoint::settings::Settings;
 
 const LOG_LEVEL_PARAM_NAME: &str = "log_level";
 const CONFIG_PARAM_NAME: &str = "config";
+const SENTRY_DSN_PARAM_NAME: &str = "sentry_dsn";
 
 
 static LOGGER: StdoutLogger = StdoutLogger;
@@ -22,12 +23,25 @@ fn main() {
                 .possible_values(["info", "debug", "trace"])
                 .default_value("info")
                 .help("Logging level"),
+            clap::Arg::new(SENTRY_DSN_PARAM_NAME)
+                .long(SENTRY_DSN_PARAM_NAME)
+                .takes_value(true)
+                .help("Sentry DSN (see https://docs.sentry.io/product/sentry-basics/dsn-explainer/ for details)"),
             clap::Arg::new(CONFIG_PARAM_NAME)
                 .takes_value(true)
                 .required(true)
                 .help("Path to a configuration file"),
         ])
         .get_matches();
+
+    let _guard = args.value_of(SENTRY_DSN_PARAM_NAME)
+        .map(|x| sentry::init((
+            x,
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                ..Default::default()
+            }
+        )));
 
     log::set_logger(&LOGGER).unwrap();
 
