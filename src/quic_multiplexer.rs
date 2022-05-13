@@ -279,7 +279,7 @@ impl QuicMultiplexer {
     fn check_server_name(&self, sni: Option<&str>) -> io::Result<ServerNameCheckStatus> {
         let settings = &self.core_settings;
 
-        // For now, SNI-based authorization is not supported for QUIC
+        // For now, SNI-based authentication is not supported for QUIC
         match sni {
             Some(x) if x == settings.tunnel_tls_host_info.hostname => Ok(ServerNameCheckStatus::Ok),
             Some(x) if settings.service_messenger_tls_host_info.as_ref().map_or(

@@ -5,7 +5,7 @@ use rustls::ServerConfig;
 use tokio::net::TcpStream;
 use tokio_rustls::{LazyConfigAcceptor, StartHandshake};
 use tokio_rustls::server::TlsStream;
-use crate::{authorization, utils};
+use crate::{authentication, log_utils, utils};
 use crate::settings::Settings;
 
 
@@ -49,7 +49,7 @@ impl TlsAcceptor {
             .map(Vec::from)
     }
 
-    pub async fn accept(self, alpn: Vec<u8>) -> io::Result<TlsStream<TcpStream>> {
+    pub async fn accept(self, alpn: Vec<u8>, log_id: &log_utils::IdChain<u64>) -> io::Result<TlsStream<TcpStream>> {
         let settings = &self.core_settings;
         let tunnel_tls_info = &settings.tunnel_tls_host_info;
         let sm_tls_into = settings.service_messenger_tls_host_info.as_ref();
@@ -63,17 +63,17 @@ impl TlsAcceptor {
                 &sm_tls_into.unwrap().cert_chain_path,
                 &sm_tls_into.unwrap().private_key_path,
             ),
-            x => match x.and_then(|x| utils::scan_sni_authorization(x, &tunnel_tls_info.hostname)) {
+            x => match x.and_then(|x| utils::scan_sni_authentication(x, &tunnel_tls_info.hostname)) {
                 None => return Err(io::Error::new(
                     ErrorKind::Other, format!("Unexpected server name in client hello: {:?}", x)
                 )),
-                Some(source) => match settings.authorizer.authorize(source).await {
-                    authorization::Status::Pass => (
+                Some(source) => match settings.authenticator.authenticate(source, log_id).await {
+                    authentication::Status::Pass => (
                         &tunnel_tls_info.cert_chain_path,
                         &tunnel_tls_info.private_key_path,
                     ),
-                    authorization::Status::Reject => return Err(io::Error::new(
-                        ErrorKind::Other, "SNI authorization failed"
+                    authentication::Status::Reject => return Err(io::Error::new(
+                        ErrorKind::Other, "SNI authentication failed"
                     )),
                 }
             }

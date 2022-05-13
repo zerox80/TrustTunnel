@@ -20,13 +20,13 @@ pub(crate) const CONNECTION_ID_FMT: &str = "CONN={}";
 
 
 #[derive(Copy, Clone)]
-pub(crate) struct IdItem<T: Copy + serde::ser::Serialize> {
+pub struct IdItem<T: Copy + serde::ser::Serialize> {
     fmt: &'static str,
     id: T,
 }
 
 #[derive(Clone)]
-pub(crate) struct IdChain<T: Copy + serde::ser::Serialize> {
+pub struct IdChain<T: Copy + serde::ser::Serialize> {
     list: Vec<IdItem<T>>,
 }
 

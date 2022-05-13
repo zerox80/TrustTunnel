@@ -1,55 +1,25 @@
-use std::borrow::Cow;
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, ErrorKind};
 use async_trait::async_trait;
+use crypto::digest::Digest;
+use crate::{authentication, log_utils};
+use crate::authentication::Authenticator;
 
 
-/// Authorization request source
-#[derive(Debug)]
-pub enum Source<'this> {
-    /// A client tries to authorize using SNI
-    Sni(Cow<'this, str>),
-    /// A client tries to authorize using
-    /// [the basic authentication scheme](https://datatracker.ietf.org/doc/html/rfc7617)
-    ProxyBasic(Cow<'this, str>),
-}
-
-/// Authorization procedure status
-pub enum Status {
-    /// Success
-    Pass,
-    /// Failure
-    Reject,
-}
-
-/// The authorizer abstract interface
-#[async_trait]
-pub trait Authorizer: Send + Sync {
-    /// Authorize client
-    async fn authorize(&self, source: Source<'_>) -> Status;
-}
-
-/// The [`Authorizer`] implementation which authorizes any request
-pub struct DummyAuthorizer {}
-
-#[async_trait]
-impl Authorizer for DummyAuthorizer {
-    async fn authorize(&self, _source: Source<'_>) -> Status {
-        Status::Pass
-    }
-}
-
-/// The [`Authorizer`] implementation which reads the authorization info from a file.
+/// The [`Authenticator`] implementation which reads the authentication info from a file.
 /// The file must contain an application id (`applicationId: <string>`),
 /// token (`token: <string>`), and credentials (`credentials: <string>`).
 /// Each one must be on a new line. The order does not matter.
-pub struct FileBasedAuthorizer {
+///
+/// *Please note*, that this is a very simple authenticator implementation which is intended mostly
+/// for testing purposes and does not respect network security practices.
+pub struct FileBasedAuthenticator {
     sni_auth: String,
     proxy_auth: String,
 }
 
-impl FileBasedAuthorizer {
+impl FileBasedAuthenticator {
     pub fn new(path: &str) -> io::Result<Self> {
         const AUTH_APP_ID_PREFIX: &str = "applicationId:";
         const AUTH_TOKEN_PREFIX: &str = "token:";
@@ -94,30 +64,29 @@ impl FileBasedAuthorizer {
         };
 
         Ok(Self {
-            sni_auth: format!("{:x}", md5::compute(format!("{}:{}:{}", app_id, token, creds))),
+            sni_auth: {
+                let mut hash = crypto::md5::Md5::new();
+                hash.input(app_id.as_bytes());
+                hash.input(&[b':']);
+                hash.input(token.as_bytes());
+                hash.input(&[b':']);
+                hash.input(creds.as_bytes());
+                hash.result_str()
+            },
             proxy_auth: base64::encode(format!("{}:{}", token, creds)),
         })
     }
 }
 
 #[async_trait]
-impl Authorizer for FileBasedAuthorizer {
-    async fn authorize(&self, source: Source<'_>) -> Status {
+impl Authenticator for FileBasedAuthenticator {
+    async fn authenticate(
+        &self, source: authentication::Source<'_>, _log_id: &log_utils::IdChain<u64>,
+    ) -> authentication::Status {
         match source {
-            Source::Sni(str) if str == self.sni_auth => Status::Pass,
-            Source::ProxyBasic(str) if str == self.proxy_auth => Status::Pass,
-            _ => Status::Reject,
-        }
-    }
-}
-
-impl<'a> ToOwned for Source<'a> {
-    type Owned = Source<'a>;
-
-    fn to_owned(&self) -> Self::Owned {
-        match self {
-            Source::Sni(x) => Source::Sni(x.to_owned()),
-            Source::ProxyBasic(x) => Source::ProxyBasic(x.to_owned()),
+            authentication::Source::Sni(str) if str == self.sni_auth => authentication::Status::Pass,
+            authentication::Source::ProxyBasic(str) if str == self.proxy_auth => authentication::Status::Pass,
+            _ => authentication::Status::Reject,
         }
     }
 }

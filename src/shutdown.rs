@@ -126,19 +126,24 @@ mod tests {
 
     #[tokio::test]
     async fn test() {
-        let mut shutdown = Shutdown::new();
-        let mut completion = shutdown.completion_handler().unwrap();
-        let mut notification = shutdown.notification_handler();
+        let shutdown = Shutdown::new();
+        let mut notification = shutdown.lock().unwrap().notification_handler();
         tokio::spawn({
+            let shutdown = shutdown.clone();
             async move {
                 notification.wait().await.unwrap();
-                completion.notify();
+                shutdown.lock().unwrap().completion_guard();
             }
         });
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        shutdown.submit();
-        shutdown.completion().await;
+        assert_eq!(
+            Ok(()),
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                shutdown.lock().unwrap().completion()
+            ).await
+        );
     }
 }

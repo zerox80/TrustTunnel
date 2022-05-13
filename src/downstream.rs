@@ -3,7 +3,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr};
 use async_trait::async_trait;
 use bytes::Bytes;
-use crate::{authorization, datagram_pipe, forwarder, icmp_utils, log_utils, pipe};
+use crate::{authentication, datagram_pipe, forwarder, icmp_utils, log_utils, pipe};
 use crate::net_utils::TcpDestination;
 
 
@@ -39,7 +39,7 @@ pub(crate) trait StreamId {
 /// An abstract interface for an authorization request implementation
 pub(crate) trait AuthorizationRequest: StreamId + Send {
     /// Get the authorization info
-    fn auth_info(&self) -> io::Result<authorization::Source>;
+    fn auth_info(&self) -> io::Result<authentication::Source>;
 
     /// Proceed the successfully authorized request
     fn succeed_request(self: Box<Self>) -> io::Result<Option<AuthorizedRequest>>;

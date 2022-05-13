@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http::{Response, StatusCode};
 use http::uri::Authority;
-use crate::{authorization, datagram_pipe, log_utils, pipe};
+use crate::{authentication, datagram_pipe, log_utils, pipe};
 
 
 pub(crate) type RequestHeaders = http::request::Parts;
@@ -46,12 +46,12 @@ pub(crate) trait PendingRequest: Send {
     }
 
     /// Get the authorization info if some
-    fn auth_info(&self) -> io::Result<authorization::Source> {
+    fn auth_info(&self) -> io::Result<authentication::Source> {
         self.request().headers
             .get("proxy-authorization")
             .and_then(|h| h.to_str().ok())
             .and_then(|s| s.strip_prefix("Basic "))
-            .map(|s| authorization::Source::ProxyBasic(s.into()))
+            .map(|s| authentication::Source::ProxyBasic(s.into()))
             .ok_or_else(|| io::Error::new(
                 ErrorKind::Other,
                 format!("Unexpected authorization header: {:?}", self.request())

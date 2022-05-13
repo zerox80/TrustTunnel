@@ -2,7 +2,7 @@ use std::io;
 use std::io::ErrorKind;
 use std::sync::{Arc, Mutex};
 use tokio::time;
-use crate::authorization::Status;
+use crate::authentication::Status;
 use crate::downstream::{AuthorizedRequest, Downstream, PendingDatagramMultiplexerRequest, PendingTcpConnectRequest};
 use crate::forwarder::Forwarder;
 use crate::{datagram_pipe, downstream, log_id, log_utils, pipe, udp_pipe};
@@ -70,6 +70,7 @@ impl Tunnel {
             let core_settings = self.core_settings.clone();
             let forwarder = self.forwarder.clone();
             let request_id = request.id();
+            let log_id = self.id.clone();
 
             tokio::spawn(async move {
                 let info = match request.auth_info() {
@@ -81,7 +82,7 @@ impl Tunnel {
                     }
                 };
 
-                match core_settings.authorizer.authorize(info).await {
+                match core_settings.authenticator.authenticate(info, &log_id).await {
                     Status::Pass => (),
                     Status::Reject => {
                         log_id!(debug, request_id, "Authorization failed");

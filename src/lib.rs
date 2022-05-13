@@ -1,9 +1,10 @@
 #[macro_use]
 extern crate log;
 
-pub mod authorization;
+pub mod authentication;
 pub mod core;
 pub mod settings;
+pub mod log_utils;
 pub mod shutdown;
 
 mod direct_forwarder;
@@ -26,7 +27,6 @@ mod tls_listener;
 mod tunnel;
 mod udp_forwarder;
 mod utils;
-mod log_utils;
 mod socks5_forwarder;
 mod datagram_pipe;
 mod udp_pipe;

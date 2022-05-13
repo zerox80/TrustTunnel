@@ -5,9 +5,10 @@ use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use serde::de::Error;
 use serde::Deserialize;
-use crate::authorization::{Authorizer, DummyAuthorizer, FileBasedAuthorizer};
+use crate::authentication::{Authenticator, DummyAuthenticator};
+use crate::authentication::file_based::FileBasedAuthenticator;
+use crate::authentication::radius::RadiusAuthenticator;
 
 
 pub type Result<T> = std::result::Result<T, BuilderError>;
@@ -55,11 +56,10 @@ pub struct Settings {
     /// The list of listener codec settings
     #[serde(deserialize_with = "deserialize_protocols")]
     pub(crate) listen_protocols: Vec<ListenProtocolSettings>,
-    /// The client authorizer
-    #[serde(default = "Settings::default_authorizer")]
-    #[serde(rename(deserialize = "auth_file"))]
-    #[serde(deserialize_with = "deserialize_authorizer")]
-    pub(crate) authorizer: Arc<dyn Authorizer>,
+    /// The client authenticator
+    #[serde(default = "Settings::default_authenticator")]
+    #[serde(deserialize_with = "deserialize_authenticator")]
+    pub(crate) authenticator: Arc<dyn Authenticator>,
     /// The ICMP forwarding settings.
     /// Setting up this feature requires superuser rights on some systems.
     pub(crate) icmp: Option<IcmpSettings>,
@@ -79,6 +79,7 @@ pub struct TlsHostInfo {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ForwardProtocolSettings {
     /// A direct forwarder routes a connection directly to its target host
     Direct(DirectForwarderSettings),
@@ -100,10 +101,46 @@ pub struct Socks5ForwarderSettingsBuilder {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ListenProtocolSettings {
     Http1(Http1Settings),
     Http2(Http2Settings),
     Quic(QuicSettings),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthenticatorSettings {
+    File(FileBasedAuthenticatorSettings),
+    Radius(RadiusAuthenticatorSettings)
+}
+
+#[derive(Deserialize)]
+pub struct FileBasedAuthenticatorSettings {
+    /// A path to the file containing the authentication info
+    #[serde(deserialize_with = "deserialize_file_path")]
+    pub(crate) path: String,
+}
+
+#[derive(Deserialize)]
+pub struct RadiusAuthenticatorSettings {
+    /// The RADIUS server address
+    pub(crate) server_address: SocketAddr,
+    /// Timeout of the authentication procedure
+    #[serde(default = "RadiusAuthenticatorSettings::default_timeout")]
+    #[serde(rename(deserialize = "timeout_secs"))]
+    #[serde(deserialize_with = "deserialize_duration_secs")]
+    pub(crate) timeout: Duration,
+    /// The password shared between the client and the RADIUS server
+    pub(crate) secret: String,
+    /// The authentication cache capacity
+    #[serde(default = "RadiusAuthenticatorSettings::default_cache_size")]
+    pub(crate) cache_size: usize,
+    /// The authentication cache entry TTL
+    #[serde(default = "RadiusAuthenticatorSettings::default_cache_ttl")]
+    #[serde(rename(deserialize = "cache_ttl_secs"))]
+    #[serde(deserialize_with = "deserialize_duration_secs")]
+    pub(crate) cache_ttl: Duration,
 }
 
 #[derive(Deserialize)]
@@ -197,7 +234,7 @@ pub struct QuicSettings {
 pub struct SettingsBuilder {
     settings: Settings,
     tunnel_tls_host_info_set: bool,
-    authorizer: Option<Box<dyn Authorizer>>,
+    authenticator: Option<Box<dyn Authenticator>>,
 }
 
 pub struct Http1SettingsBuilder {
@@ -210,6 +247,10 @@ pub struct Http2SettingsBuilder {
 
 pub struct QuicSettingsBuilder {
     settings: QuicSettings,
+}
+
+pub struct RadiusAuthenticatorSettingsBuilder {
+    settings: RadiusAuthenticatorSettings,
 }
 
 pub struct IcmpSettingsBuilder {
@@ -226,7 +267,7 @@ pub enum BuilderError {
     ServiceMessengerTlsHostInfo(String),
     /// [`Settings.listen_protocols`] are not set
     ListenProtocols,
-    /// Invalid authorization info
+    /// Invalid authentication info
     AuthInfo(String),
 }
 
@@ -253,8 +294,8 @@ impl Settings {
         true
     }
 
-    fn default_authorizer() -> Arc<dyn Authorizer> {
-        Arc::new(DummyAuthorizer {})
+    fn default_authenticator() -> Arc<dyn Authenticator> {
+        Arc::new(DummyAuthenticator {})
     }
 
     fn default_tls_handshake_timeout() -> Duration {
@@ -370,6 +411,24 @@ impl QuicSettings {
     }
 }
 
+impl RadiusAuthenticatorSettings {
+    pub fn builder() -> RadiusAuthenticatorSettingsBuilder {
+        RadiusAuthenticatorSettingsBuilder::new()
+    }
+
+    fn default_timeout() -> Duration {
+        Duration::from_secs(3)
+    }
+
+    fn default_cache_size() -> usize {
+        1024
+    }
+
+    fn default_cache_ttl() -> Duration {
+        Duration::from_secs(10)
+    }
+}
+
 impl IcmpSettings {
     pub fn builder() -> IcmpSettingsBuilder {
         IcmpSettingsBuilder::new()
@@ -399,11 +458,11 @@ impl SettingsBuilder {
                 udp_connections_timeout: Settings::default_udp_connections_timeout(),
                 forward_protocol: Default::default(),
                 listen_protocols: vec![],
-                authorizer: Settings::default_authorizer(),
+                authenticator: Settings::default_authenticator(),
                 icmp: None,
             },
             tunnel_tls_host_info_set: false,
-            authorizer: None,
+            authenticator: None,
         }
     }
 
@@ -432,8 +491,8 @@ impl SettingsBuilder {
             return Err(BuilderError::ListenProtocols);
         }
 
-        self.settings.authorizer = Arc::from(
-            self.authorizer.ok_or_else(|| BuilderError::AuthInfo("Not set".to_string()))?
+        self.settings.authenticator = Arc::from(
+            self.authenticator.ok_or_else(|| BuilderError::AuthInfo("Not set".to_string()))?
         );
 
         Ok(self.settings)
@@ -508,9 +567,9 @@ impl SettingsBuilder {
         self
     }
 
-    /// Set the client authorizer
-    pub fn authorizer(mut self, x: Box<dyn Authorizer>) -> Self {
-        self.authorizer = Some(x);
+    /// Set the client authenticator
+    pub fn authenticator(mut self, x: Box<dyn Authenticator>) -> Self {
+        self.authenticator = Some(x);
         self
     }
 
@@ -715,6 +774,57 @@ impl QuicSettingsBuilder {
     }
 }
 
+impl RadiusAuthenticatorSettingsBuilder {
+    fn new() -> Self {
+        Self {
+            settings: RadiusAuthenticatorSettings {
+                server_address: SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)),
+                timeout: RadiusAuthenticatorSettings::default_timeout(),
+                secret: Default::default(),
+                cache_size: RadiusAuthenticatorSettings::default_cache_size(),
+                cache_ttl: RadiusAuthenticatorSettings::default_cache_ttl(),
+            },
+        }
+    }
+
+    /// Finalize [`RadiusAuthenticatorSettings`]
+    pub fn build(self) -> RadiusAuthenticatorSettings {
+        self.settings
+    }
+
+    /// Set the RADIUS server address
+    pub fn server_address<A: ToSocketAddrs>(mut self, v: A) -> io::Result<Self> {
+        self.settings.server_address = v.to_socket_addrs()?
+            .next()
+            .ok_or_else(|| io::Error::new(ErrorKind::Other, "Parsed address to empty list"))?;
+        Ok(self)
+    }
+
+    /// Set timeout of the authentication procedure
+    pub fn timeout(mut self, v: Duration) -> Self {
+        self.settings.timeout = v;
+        self
+    }
+
+    /// Set the password shared between the client and the RADIUS server
+    pub fn secret(mut self, v: String) -> Self {
+        self.settings.secret = v;
+        self
+    }
+
+    /// Set the authentication cache capacity
+    pub fn cache_size(mut self, v: usize) -> Self {
+        self.settings.cache_size = v;
+        self
+    }
+
+    /// Set the authentication cache entry TTL
+    pub fn cache_ttl(mut self, v: Duration) -> Self {
+        self.settings.cache_ttl = v;
+        self
+    }
+}
+
 impl IcmpSettingsBuilder {
     fn new() -> Self {
         Self {
@@ -811,7 +921,7 @@ fn deserialize_protocols<'de, D>(deserializer: D) -> std::result::Result<Vec<Lis
             if !out.is_empty() {
                 Ok(out)
             } else {
-                Err(A::Error::invalid_length(0, &Visitor {}))
+                Err(serde::de::Error::invalid_length(0, &Visitor {}))
             }
         }
     }
@@ -845,15 +955,18 @@ fn deserialize_file_path<'de, D>(deserializer: D) -> std::result::Result<String,
     deserializer.deserialize_str(Visitor)
 }
 
-fn deserialize_authorizer<'de, D>(deserializer: D) -> std::result::Result<Arc<dyn Authorizer>, D::Error>
+fn deserialize_authenticator<'de, D>(deserializer: D) -> std::result::Result<Arc<dyn Authenticator>, D::Error>
     where
         D: serde::de::Deserializer<'de>,
 {
-    Ok(Arc::new(
-        FileBasedAuthorizer::new(&deserialize_file_path(deserializer)?)
-            .map_err(|e| D::Error::invalid_value(
-                serde::de::Unexpected::Other(&format!("authorizer initialization error: {}", e)),
-                &"a file with valid authorization info"
-            ))?
-    ))
+    match AuthenticatorSettings::deserialize(deserializer)? {
+        AuthenticatorSettings::File(x) => Ok(Arc::new(
+            FileBasedAuthenticator::new(&x.path)
+                .map_err(|e| serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Other(&format!("authenticator initialization error: {}", e)),
+                    &"a file with valid authentication info"
+                ))?
+        )),
+        AuthenticatorSettings::Radius(x) => Ok(Arc::new(RadiusAuthenticator::new(x))),
+    }
 }

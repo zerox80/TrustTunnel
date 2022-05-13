@@ -255,7 +255,7 @@ impl Core {
             };
         log_id!(trace, client_id, "Selected protocol: {:?}", proto);
 
-        let stream = match acceptor.accept(proto.as_alpn().as_bytes().to_vec()).await {
+        let stream = match acceptor.accept(proto.as_alpn().as_bytes().to_vec(), &client_id).await {
             Ok(s) => {
                 log_id!(debug, client_id, "New TLS client: {:?}", s);
                 s
