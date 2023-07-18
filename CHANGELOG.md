@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.9.56
+
 * Added a [docker image](docker/Dockerfile) with a configured and running endpoint.
 * Added a [Makefile](Makefile) to simplify building and running the endpoint.
 * Setup Wizard now doesn't ask for parameters specified through command line arguments.
