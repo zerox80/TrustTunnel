@@ -194,8 +194,7 @@ This template can be used to set up the endpoint as a systemd service:
 
 ```bash
 cd /opt/trusttunnel/
-mv trusttunnel.service.template trusttunnel.service
-sudo ln -s trusttunnel.service /etc/systemd/system/trusttunnel.service
+cp trusttunnel.service.template /etc/systemd/system/trusttunnel.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now trusttunnel
 ```

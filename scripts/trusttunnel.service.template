@@ -1,8 +1,7 @@
 # Service template for the TrustTunnel endpoint
-# Adjust paths at `ExecStart` and symlink this to systemd system directory:
+# Adjust paths at `ExecStart` and copy file to systemd system directory:
 #
-# mv trusttunnel.service.template trusttunnel.service
-# ln -s trusttunnel.service /etc/systemd/system/trusttunnel.service
+# cp trusttunnel.service.template /etc/systemd/system/trusttunnel.service
 # systemctl daemon-reload
 # systemctl enable --now trusttunnel
 
