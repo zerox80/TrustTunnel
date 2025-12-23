@@ -211,9 +211,10 @@ To generate the configuration, run the following command:
 
 ```shell
 # <client_name> - name of the client those credentials will be included in the configuration
-# <public_ip_and_port> - `ip:port` that the user will use to connect to the endpoint
+# <public_ip> - `ip` or `ip:port` that the user will use to connect to the endpoint
+#             If only `ip` is specified, the port from the `listen_address` field will be used
 cd /opt/trusttunnel/
-./trusttunnel_endpoint vpn.toml hosts.toml -c <client_name> -a <public_ip_and_port>
+./trusttunnel_endpoint vpn.toml hosts.toml -c <client_name> -a <public_ip>
 ```
 
 This will print the configuration with the credentials for the client named

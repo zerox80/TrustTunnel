@@ -67,6 +67,9 @@ The endpoint binary accepts the following command line arguments:
 ./trusttunnel_endpoint vpn.toml hosts.toml --logfile /var/log/trusttunnel.log
 
 # Export client configuration
+./trusttunnel_endpoint vpn.toml hosts.toml -c username -a 203.0.113.1
+
+# Export client configuration with explicit port
 ./trusttunnel_endpoint vpn.toml hosts.toml -c username -a 203.0.113.1:443
 ```
 

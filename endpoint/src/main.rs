@@ -1,4 +1,6 @@
 use log::{error, info, LevelFilter};
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::signal;
 use trusttunnel::authentication::registry_based::RegistryBasedAuthenticator;
@@ -134,15 +136,23 @@ fn main() {
 
     if args.contains_id(CLIENT_CONFIG_PARAM_NAME) {
         let username = args.get_one::<String>(CLIENT_CONFIG_PARAM_NAME).unwrap();
-        let addresses: Vec<String> = args
+        let addresses: Vec<SocketAddr> = args
             .get_many::<String>(ADDRESS_PARAM_NAME)
-            .map(Iterator::cloned)
-            .map(Iterator::collect)
-            .expect("Addresses should be specified");
+            .expect("At least one address should be specified")
+            .map(|x| {
+                SocketAddr::from_str(x)
+                    .or_else(|_| {
+                        SocketAddr::from_str(&format!("{}:{}", x, settings.get_listen_address().port()))
+                    })
+                    .unwrap_or_else(|_| {
+                        panic!("Failed to parse address. Expected `ip` or `ip:port` format, found: `{}`", x);
+                    }) 
+            })
+            .collect();
 
         let client_config = client_config::build(
             &username,
-            &addresses,
+            addresses,
             settings.get_clients(),
             &tls_hosts_settings,
         );

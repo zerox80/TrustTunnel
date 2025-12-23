@@ -2,11 +2,12 @@ use crate::{authentication::registry_based, settings::TlsHostsSettings, utils::T
 #[cfg(feature = "rt_doc")]
 use macros::{Getter, RuntimeDoc};
 use once_cell::sync::Lazy;
+use std::net::SocketAddr;
 use toml_edit::{value, Document};
 
 pub fn build(
     client: &String,
-    addresses: &Vec<String>,
+    addresses: Vec<SocketAddr>,
     username: &Vec<registry_based::Client>,
     hostsettings: &TlsHostsSettings,
 ) -> ClientConfig {
@@ -22,7 +23,7 @@ pub fn build(
 
     ClientConfig {
         hostname: host.hostname.clone(),
-        addresses: addresses.clone(),
+        addresses: addresses,
         has_ipv6: true, // Hardcoded to true, client could change this himself
         username: user.username.clone(),
         password: user.password.clone(),
@@ -40,7 +41,7 @@ pub struct ClientConfig {
     /// Endpoint host name, used for TLS session establishment
     hostname: String,
     /// Endpoint addresses.
-    addresses: Vec<String>,
+    addresses: Vec<SocketAddr>,
     /// Whether IPv6 traffic can be routed through the endpoint
     has_ipv6: bool,
     /// Username for authorization
@@ -65,7 +66,7 @@ impl ClientConfig {
     pub fn compose_toml(&self) -> String {
         let mut doc: Document = TEMPLATE.parse().unwrap();
         doc["hostname"] = value(&self.hostname);
-        let vec = toml_edit::Array::from_iter(self.addresses.iter());
+        let vec = toml_edit::Array::from_iter(self.addresses.iter().map(|x| x.to_string()));
         doc["addresses"] = value(vec);
         doc["has_ipv6"] = value(self.has_ipv6);
         doc["username"] = value(&self.username);

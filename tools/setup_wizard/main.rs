@@ -74,7 +74,7 @@ fn main() {
         --hosts-settings hosts.toml
 
     # After setup, export client configuration:
-    ./trusttunnel_endpoint vpn.toml hosts.toml -c admin -a 203.0.113.1:443
+    ./trusttunnel_endpoint vpn.toml hosts.toml -c admin -a 203.0.113.1
 
 For detailed configuration options, see:
 https://github.com/TrustTunnel/TrustTunnel/blob/master/CONFIGURATION.md
