@@ -151,12 +151,31 @@ fn lookup_existent_cert() -> Option<Cert> {
     parse_cert(cert_key_pair)
 }
 
+fn print_cert_error(path: &str, error: &std::io::Error) {
+    let message = match error.kind() {
+        std::io::ErrorKind::PermissionDenied => {
+            format!("Permission denied: cannot read '{}'", path)
+        }
+        std::io::ErrorKind::NotFound => {
+            format!("File not found: '{}'", path)
+        }
+        std::io::ErrorKind::InvalidInput => {
+            format!("Invalid certificate or key format in '{}': {}", path, error)
+        }
+        _ => {
+            format!("Failed to read '{}': {}", path, error)
+        }
+    };
+    eprintln!("Error: {}", message);
+}
+
 fn parse_cert(cert: Either<&str, (&str, &str)>) -> Option<Cert> {
     let (chain, cert_path, key_path) = cert.map(
         |pair| {
             Some((
                 utils::load_private_key(pair)
                     .and_then(|_| utils::load_certs(pair))
+                    .map_err(|e| print_cert_error(pair, &e))
                     .ok()?,
                 pair,
                 pair,
@@ -170,7 +189,14 @@ fn parse_cert(cert: Either<&str, (&str, &str)>) -> Option<Cert> {
         ) {
             (Ok(chain), Ok(_), _, _) => Some((chain, a, b)),
             (_, _, Ok(chain), Ok(_)) => Some((chain, b, a)),
-            _ => None,
+            (Err(e), _, _, _) => {
+                print_cert_error(a, &e);
+                None
+            }
+            (_, Err(e), _, _) => {
+                print_cert_error(b, &e);
+                None
+            }
         },
     )?;
 

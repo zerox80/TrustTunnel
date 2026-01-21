@@ -576,11 +576,29 @@ download() {
 
 report_success() {
   echo
-  echo "TrustTunnel has been installed successfully!"
+  echo "============================================================"
+  echo "  TrustTunnel Endpoint was installed to '${output_dir}'"
+  echo "============================================================"
   echo
-  echo "You probably want to configure the endpoint first, see 'cd ${output_dir} && setup_wizard -h'"
-  echo "The endpoint executable is located at '${output_dir}/trusttunnel_endpoint'"
-  echo "The '${output_dir}/trusttunnel.service.template' template could be used to run a configured endpoint as a systemd service"
+  echo "--- Continue setup ---"
+  echo
+  echo "Run the Setup Wizard to continue the endpoint setup:"
+  echo
+  echo "    cd ${output_dir}"
+  echo "    sudo ./setup_wizard"
+  echo
+  echo "--- Configure systemd service ---"
+  echo
+  echo "The '${output_dir}/trusttunnel.service.template' template"
+  echo "could be used to run a configured endpoint as a systemd service."
+  echo
+  echo "Once the endpoint setup is finished, run the following commands"
+  echo "to configure a systemd service:"
+  echo
+  echo "    cd ${output_dir}/"
+  echo "    sudo cp trusttunnel.service.template /etc/systemd/system/trusttunnel.service"
+  echo "    sudo systemctl daemon-reload"
+  echo "    sudo systemctl enable --now trusttunnel"
   echo
 }
 

@@ -171,8 +171,11 @@ for data required for endpoint configuration.
 
 ```bash
 cd /opt/trusttunnel/
-./setup_wizard
+sudo ./setup_wizard
 ```
+
+> [!NOTE]
+> `sudo` is required to manage TLS certificates properly.
 
 The wizard will ask for the following fields, some of them have the default
 values you could safely use:

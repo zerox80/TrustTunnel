@@ -63,10 +63,10 @@ fn main() {
         .after_help(
             r#"EXAMPLES:
     # Interactive setup (recommended for first-time users)
-    ./setup_wizard
+    sudo ./setup_wizard
 
     # Non-interactive setup (for scripting/CI)
-    ./setup_wizard -m non-interactive \
+    sudo ./setup_wizard -m non-interactive \
         -a 0.0.0.0:443 \
         -c admin:secretpass \
         -n vpn.example.com \
@@ -74,7 +74,7 @@ fn main() {
         --hosts-settings hosts.toml
 
     # After setup, export client configuration:
-    ./trusttunnel_endpoint vpn.toml hosts.toml -c admin -a 203.0.113.1
+    sudo ./trusttunnel_endpoint vpn.toml hosts.toml -c admin -a 203.0.113.1
 
 For detailed configuration options, see:
 https://github.com/TrustTunnel/TrustTunnel/blob/master/CONFIGURATION.md
