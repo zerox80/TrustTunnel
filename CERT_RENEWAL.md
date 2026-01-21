@@ -143,6 +143,13 @@ To save a deploy hook that will run after each successful renewal:
 sudo certbot reconfigure --deploy-hook "systemctl restart trusttunnel"
 ```
 
+For older versions of certbot (<2.3.0), add the following line to the `[renewalparams]` section of
+`/etc/letsencrypt/renewal/<yourdomain>.conf`:
+
+```conf
+renew_hook = systemctl restart trusttunnel
+```
+
 Adjust `trusttunnel` to your actual systemd unit name.
 
 ## Test renewal
