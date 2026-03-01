@@ -35,7 +35,7 @@ run_setup_wizard() {
     if [ -n "$TT_LISTEN_ADDRESS" ]; then
         args+=("-a" "$TT_LISTEN_ADDRESS")
     else
-        args+=("-a" "0.0.0.0:443")
+        args+=("-a" "0.0.0.0:8443")
     fi
 
     if [ -n "$TT_CERT_TYPE" ]; then

@@ -4,9 +4,13 @@ services:
     image: trusttunnel-endpoint:latest
     container_name: trusttunnel
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
     ports:
-      - "${TT_PORT_TCP:-443}:443"
-      - "${TT_PORT_UDP:-443}:443/udp"
+      - "${TT_PORT_TCP:-443}:8443"
+      - "${TT_PORT_UDP:-443}:8443/udp"
     volumes:
       - ./data:/trusttunnel_endpoint
     cap_add:
@@ -19,7 +23,7 @@ services:
       - net.ipv4.ip_forward=1
       - net.ipv6.conf.all.forwarding=1
     healthcheck:
-      test: ["CMD", "curl", "-f", "-k", "https://localhost:443/health"]
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,7 +34,7 @@ services:
     #   - TT_CREDENTIALS=${TT_CREDENTIALS}
     #   - TT_CERT_TYPE=${TT_CERT_TYPE:-self-signed}
     #   - TT_ACME_EMAIL=${TT_ACME_EMAIL}
-    #   - TT_LISTEN_ADDRESS=${TT_LISTEN_ADDRESS:-0.0.0.0:443}
+    #   - TT_LISTEN_ADDRESS=${TT_LISTEN_ADDRESS:-0.0.0.0:8443}
 
 volumes:
   data:
